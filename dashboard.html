@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>InventAI | FEFO Inventory Dashboard</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="theme.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body class="min-h-screen antialiased selection:bg-emerald-500 selection:text-white">
+
+  <!-- Sidebar -->
+  <aside id="sidebar" class="fixed inset-y-0 left-0 z-40 w-64 bg-white border-r border-slate-200 px-4 py-5 flex flex-col -translate-x-full lg:translate-x-0 transition-transform duration-200">
+    <a href="dashboard.html" class="flex items-center gap-2.5 px-1 mb-6">
+      <img src="logo.png" alt="InventAI logo" class="logo-img w-12 h-12">
+      <div>
+        <div class="text-lg font-extrabold text-slate-900 leading-tight">InventAI</div>
+        <div class="text-[11px] text-slate-500">FEFO inventory control</div>
+      </div>
+    </a>
+
+    <nav class="space-y-1 flex-1" aria-label="Main">
+      <button class="nav-item active" data-view="overview" onclick="showView('overview')"><i data-lucide="layout-dashboard" class="w-4 h-4"></i> Overview</button>
+      <button class="nav-item" data-view="batches" onclick="showView('batches')"><i data-lucide="layers" class="w-4 h-4"></i> FEFO batches</button>
+      <button class="nav-item" data-view="lowstock" onclick="showView('lowstock')"><i data-lucide="package-minus" class="w-4 h-4"></i> Low stock <span class="nav-badge" id="navLowCount">0</span></button>
+      <button class="nav-item" data-view="expiry" onclick="showView('expiry')"><i data-lucide="timer-reset" class="w-4 h-4"></i> Expiry alerts <span class="nav-badge" id="navExpiryCount">0</span></button>
+      <button class="nav-item" data-view="scanner" onclick="showView('scanner')"><i data-lucide="scan-barcode" class="w-4 h-4"></i> QR / barcode scanner</button>
+      <button class="nav-item" data-view="forecast" onclick="showView('forecast')"><i data-lucide="trending-up" class="w-4 h-4"></i> Demand forecast</button>
+      <button class="nav-item" data-view="assistant" onclick="showView('assistant')"><i data-lucide="bot" class="w-4 h-4"></i> AI assistant</button>
+    </nav>
+
+    <div class="mt-4 p-3 rounded-xl bg-slate-50 border border-slate-200 flex items-center gap-2.5">
+      <div id="userInitial" class="w-8 h-8 rounded-full bg-gradient-to-tr from-emerald-600 to-teal-500 text-white flex items-center justify-center text-xs font-bold">A</div>
+      <div class="min-w-0 flex-1">
+        <div id="userEmail" class="text-xs font-semibold text-slate-800 truncate">admin@inventai.com</div>
+        <div id="userRole" class="text-[11px] text-slate-500">Super Admin</div>
+      </div>
+      <a href="login.html" title="Log out" class="p-1.5 text-slate-500 hover:text-rose-500 rounded-lg"><i data-lucide="log-out" class="w-4 h-4"></i></a>
+    </div>
+  </aside>
+
+  <div class="lg:pl-64 min-h-screen flex flex-col">
+    <!-- Top bar -->
+    <header class="sticky top-0 z-30 bg-white/90 backdrop-blur border-b border-slate-200 px-4 lg:px-8 py-3 flex items-center gap-3">
+      <button class="lg:hidden p-2 rounded-lg text-slate-600 hover:bg-slate-100" onclick="toggleSidebar()" aria-label="Open menu"><i data-lucide="menu" class="w-5 h-5"></i></button>
+      <div class="min-w-0">
+        <h1 id="pageTitle" class="text-base font-bold text-slate-900 truncate">Overview</h1>
+        <p id="pageSub" class="text-[11px] text-slate-500 truncate">Today's warehouse at a glance.</p>
+      </div>
+      <div class="flex-1 max-w-md ml-auto hidden md:block">
+        <div class="relative">
+          <span class="absolute inset-y-0 left-0 pl-3 flex items-center text-slate-400"><i data-lucide="search" class="w-4 h-4"></i></span>
+          <input type="text" id="globalSearchInput" oninput="filterInventory()" onfocus="showView('batches')"
+            class="w-full pl-9 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500" placeholder="Search product, SKU, batch or barcode">
+        </div>
+      </div>
+      <select id="langSelect" onchange="changeLanguage(this.value)" class="bg-slate-50 border border-slate-200 text-slate-700 text-xs rounded-xl px-2.5 py-2 cursor-pointer" aria-label="Language">
+        <option value="en">English</option><option value="hi">हिन्दी</option><option value="es">Español</option><option value="fr">Français</option>
+      </select>
+      <div class="hidden sm:flex items-center gap-2 text-xs text-slate-600 bg-slate-50 border border-slate-200 px-3 py-2 rounded-xl">
+        <i data-lucide="calendar" class="w-3.5 h-3.5 text-teal-500"></i><span id="currentDateDisplay"></span>
+      </div>
+    </header>
+
+    <main class="flex-1 p-4 lg:p-8 max-w-6xl w-full">
+
+      <!-- OVERVIEW (Daily highlights) -->
+      <section id="view-overview" class="view active space-y-6">
+        <div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+          <div class="bg-white border border-rose-200 rounded-2xl p-4 glow-card">
+            <div class="flex items-center gap-2 text-xs font-semibold text-rose-700"><i data-lucide="flame" class="w-4 h-4"></i> Dispatch first</div>
+            <div class="mt-2 flex items-baseline gap-2"><span id="fefoUrgentCount" class="text-3xl font-extrabold text-slate-900">14</span><span class="text-xs text-slate-500">batches to clear</span></div>
+            <p class="text-[11px] text-slate-500 mt-2">Earliest expiry: <b class="text-slate-700">1 day left</b></p>
+          </div>
+          <div class="bg-white border border-amber-200 rounded-2xl p-4 glow-card">
+            <div class="flex items-center gap-2 text-xs font-semibold text-amber-700"><i data-lucide="clock" class="w-4 h-4"></i> Expiring within 7 days</div>
+            <div class="mt-2 flex items-baseline gap-2"><span id="criticalExpiryCount" class="text-3xl font-extrabold text-slate-900">8</span><span class="text-xs text-slate-500">batches</span></div>
+            <p class="text-[11px] text-slate-500 mt-2">At-risk value: <b class="text-slate-700">$4,850</b></p>
+          </div>
+          <div class="bg-white border border-orange-200 rounded-2xl p-4 glow-card">
+            <div class="flex items-center gap-2 text-xs font-semibold text-orange-700"><i data-lucide="package-minus" class="w-4 h-4"></i> Below reorder point</div>
+            <div class="mt-2 flex items-baseline gap-2"><span id="lowStockCount" class="text-3xl font-extrabold text-slate-900">5</span><span class="text-xs text-slate-500">products</span></div>
+            <p class="text-[11px] text-slate-500 mt-2">Bread and insulin run out in under 5 days</p>
+          </div>
+          <div class="bg-white border border-emerald-200 rounded-2xl p-4 glow-card">
+            <div class="flex items-center gap-2 text-xs font-semibold text-emerald-700"><i data-lucide="scan-barcode" class="w-4 h-4"></i> Scanned today</div>
+            <div class="mt-2 flex items-baseline gap-2"><span id="scannedToday" class="text-3xl font-extrabold text-slate-900">412</span><span class="text-xs text-slate-500">barcodes</span></div>
+            <p class="text-[11px] text-slate-500 mt-2">99.4% FEFO routing compliance</p>
+          </div>
+        </div>
+
+        <div class="bg-white border border-slate-200 rounded-2xl p-5 glow-card">
+          <div class="flex items-center justify-between mb-4">
+            <h3 class="text-sm font-bold text-slate-900 flex items-center gap-2"><i data-lucide="activity" class="w-4 h-4 text-teal-500"></i> Recent warehouse activity</h3>
+            <span class="text-[11px] text-slate-500">Updates live</span>
+          </div>
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-3" id="activityStreamContainer"></div>
+        </div>
+      </section>
+
+      <!-- FEFO BATCHES -->
+      <section id="view-batches" class="view space-y-4">
+        <div class="flex flex-wrap items-center gap-2">
+          <button onclick="setCategoryFilter('all')" id="filter-all" class="px-3 py-1.5 rounded-xl text-xs font-semibold bg-emerald-600 text-white">All items</button>
+          <button onclick="setCategoryFilter('Pharmaceuticals')" id="filter-pharma" class="px-3 py-1.5 rounded-xl text-xs font-semibold bg-slate-100 text-slate-700 hover:bg-slate-200">Pharmaceuticals</button>
+          <button onclick="setCategoryFilter('Dairy & Perishables')" id="filter-dairy" class="px-3 py-1.5 rounded-xl text-xs font-semibold bg-slate-100 text-slate-700 hover:bg-slate-200">Dairy and fresh</button>
+          <button onclick="filterOnlyFefoUrgent()" id="filter-fefo" class="px-3 py-1.5 rounded-xl text-xs font-semibold bg-rose-50 text-rose-700 border border-rose-200 hover:bg-rose-100 flex items-center gap-1.5"><i data-lucide="flame" class="w-3.5 h-3.5"></i> Dispatch first only</button>
+        </div>
+        <div class="space-y-4" id="productsTableContainer"></div>
+      </section>
+
+      <!-- LOW STOCK -->
+      <section id="view-lowstock" class="view">
+        <div class="bg-white border border-orange-200 rounded-2xl p-5 glow-card">
+          <div class="flex items-center justify-between mb-4">
+            <p class="text-xs text-slate-500">Products at or below their reorder point, closest to stockout first.</p>
+            <button onclick="triggerQuickReorderModal()" class="px-3 py-1.5 bg-orange-50 hover:bg-orange-100 text-orange-700 border border-orange-200 text-xs font-semibold rounded-lg flex items-center gap-1.5"><i data-lucide="file-plus" class="w-3.5 h-3.5"></i> Create purchase orders</button>
+          </div>
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-3" id="lowStockItemsContainer"></div>
+        </div>
+      </section>
+
+      <!-- EXPIRY ALERTS -->
+      <section id="view-expiry" class="view">
+        <div class="bg-white border border-rose-200 rounded-2xl p-5 glow-card">
+          <p class="text-xs text-slate-500 mb-4">Batches expiring within 30 days, soonest first. Select one to verify it in the scanner.</p>
+          <div class="space-y-3" id="expiryAlertItemsContainer"></div>
+        </div>
+      </section>
+
+      <!-- SCANNER -->
+      <section id="view-scanner" class="view">
+        <div class="bg-white border border-slate-200 rounded-2xl p-5 glow-card max-w-2xl">
+          <p class="text-xs text-slate-500 mb-4">Scan packaging to check batch, shelf life and which batch leaves first.</p>
+          <div class="relative bg-black border border-slate-200 rounded-2xl h-60 flex items-center justify-center overflow-hidden mb-5">
+            <video id="webcamVideo" autoplay playsinline muted class="absolute inset-0 w-full h-full object-cover hidden"></video>
+            <div class="scanner-laser z-20 pointer-events-none"></div>
+            <div class="w-48 h-48 border-2 border-emerald-400/50 rounded-2xl relative flex flex-col items-center justify-center z-20">
+              <div class="absolute top-0 left-0 w-4 h-4 border-t-2 border-l-2 border-teal-400"></div><div class="absolute top-0 right-0 w-4 h-4 border-t-2 border-r-2 border-teal-400"></div>
+              <div class="absolute bottom-0 left-0 w-4 h-4 border-b-2 border-l-2 border-teal-400"></div><div class="absolute bottom-0 right-0 w-4 h-4 border-b-2 border-r-2 border-teal-400"></div>
+              <i id="cameraIconPlaceholder" data-lucide="camera" class="w-7 h-7 text-slate-400 mb-1"></i>
+              <span id="cameraStatusText" class="text-[10px] text-slate-300">Align barcode or QR</span>
+              <div class="flex items-center gap-1.5 mt-2.5">
+                <button id="toggleWebcamBtn" onclick="toggleWebcam()" class="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-[11px] font-bold flex items-center gap-1"><i data-lucide="video" class="w-3.5 h-3.5"></i><span id="webcamBtnText">Turn on webcam</span></button>
+                <button onclick="autoScanFirstItem()" class="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-lg text-[11px] font-semibold">Test scan</button>
+              </div>
+            </div>
+            <div class="absolute bottom-2 left-3 right-3 text-[11px] text-slate-400 z-20"><span id="webcamStatusBadge" class="flex items-center gap-1.5"><span class="w-2 h-2 rounded-full bg-teal-400"></span> Camera ready</span></div>
+          </div>
+          <p class="text-xs font-semibold text-slate-600 mb-2">Or pick a sample product</p>
+          <div class="grid grid-cols-1 sm:grid-cols-3 gap-2 mb-5">
+            <button onclick="simulateScan('PROD-102')" class="p-2.5 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-xl text-left text-xs"><span class="font-bold text-slate-800 block">Fresh milk 1L</span><span class="text-[10px] text-slate-500 font-mono">8902519001423</span></button>
+            <button onclick="simulateScan('PROD-101')" class="p-2.5 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-xl text-left text-xs"><span class="font-bold text-slate-800 block">Amoxicillin 500mg</span><span class="text-[10px] text-slate-500 font-mono">8901030889211</span></button>
+            <button onclick="simulateScan('PROD-106')" class="p-2.5 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-xl text-left text-xs"><span class="font-bold text-slate-800 block">Wheat bread</span><span class="text-[10px] text-slate-500 font-mono">8908877112233</span></button>
+          </div>
+          <div id="scannedResultCard" class="hidden bg-emerald-50 border border-emerald-200 rounded-2xl p-4"></div>
+        </div>
+      </section>
+
+      <!-- FORECAST -->
+      <section id="view-forecast" class="view">
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+          <div class="lg:col-span-8 bg-white border border-slate-200 rounded-2xl p-5 glow-card">
+            <div class="flex items-center justify-between gap-2 mb-4">
+              <p class="text-xs text-slate-500">Projected stock over 14 days against the safe threshold.</p>
+              <div class="flex gap-2">
+                <button onclick="updateForecastChart('milk')" class="px-2.5 py-1 text-xs rounded-lg bg-emerald-600 text-white font-semibold">Fresh milk</button>
+                <button onclick="updateForecastChart('amoxicillin')" class="px-2.5 py-1 text-xs rounded-lg bg-slate-100 text-slate-700 hover:bg-slate-200 font-semibold">Amoxicillin</button>
+              </div>
+            </div>
+            <div class="relative h-64 w-full"><canvas id="predictionChart"></canvas></div>
+            <div class="mt-4 pt-3 border-t border-slate-200 grid grid-cols-3 gap-2 text-center text-xs">
+              <div class="p-2 bg-slate-50 rounded-xl"><span class="text-slate-500 block text-[11px]">Use per day</span><span class="text-slate-900 font-bold text-sm">~18 units</span></div>
+              <div class="p-2 bg-slate-50 rounded-xl"><span class="text-slate-500 block text-[11px]">Runs out</span><span class="text-rose-500 font-bold text-sm">in 2.3 days</span></div>
+              <div class="p-2 bg-slate-50 rounded-xl"><span class="text-slate-500 block text-[11px]">Reorder</span><span class="text-teal-500 font-bold text-sm">45 units by tomorrow</span></div>
+            </div>
+          </div>
+          <div class="lg:col-span-4 bg-white border border-slate-200 rounded-2xl p-5 glow-card flex flex-col justify-between">
+            <div>
+              <h3 class="text-sm font-bold text-slate-900 flex items-center gap-2 mb-1"><i data-lucide="shield-alert" class="w-4 h-4 text-rose-500"></i> Stockout risk</h3>
+              <p class="text-xs text-slate-500 mb-4">Ranked by days until empty.</p>
+              <div class="space-y-3" id="riskRadarContainer"></div>
+            </div>
+            <button onclick="triggerQuickReorderModal()" class="w-full mt-4 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold rounded-xl flex items-center justify-center gap-2"><i data-lucide="truck" class="w-3.5 h-3.5"></i> Create supplier orders</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- AI ASSISTANT -->
+      <section id="view-assistant" class="view">
+        <div class="bg-white border border-slate-200 rounded-2xl glow-card max-w-3xl flex flex-col h-[calc(100vh-11rem)] min-h-[420px] overflow-hidden">
+          <div class="px-4 py-2.5 border-b border-slate-200 flex items-center justify-between">
+            <span class="text-xs font-semibold text-slate-500">Language</span>
+            <div class="flex items-center gap-1">
+              <button onclick="switchBotLanguage('en')" id="botLang-en" class="px-2 py-0.5 rounded-md text-xs font-semibold bg-emerald-600 text-white">English</button>
+              <button onclick="switchBotLanguage('hi')" id="botLang-hi" class="px-2 py-0.5 rounded-md text-xs font-medium bg-white text-slate-600 border border-slate-200">हिन्दी</button>
+              <button onclick="switchBotLanguage('es')" id="botLang-es" class="px-2 py-0.5 rounded-md text-xs font-medium bg-white text-slate-600 border border-slate-200">ES</button>
+              <button onclick="switchBotLanguage('fr')" id="botLang-fr" class="px-2 py-0.5 rounded-md text-xs font-medium bg-white text-slate-600 border border-slate-200">FR</button>
+            </div>
+          </div>
+          <div id="chatMessages" class="flex-1 overflow-y-auto p-4 space-y-3">
+            <div class="flex items-start gap-2.5">
+              <div class="w-7 h-7 rounded-lg bg-emerald-100 text-emerald-800 flex items-center justify-center flex-shrink-0 text-xs font-bold border border-emerald-200">AI</div>
+              <div class="bg-slate-50 border border-slate-200 text-slate-700 rounded-2xl rounded-tl-none p-3 text-xs leading-relaxed max-w-[85%]">Ask about batches, expiry dates or what to dispatch today. Type, pick a suggestion, or use the mic.</div>
+            </div>
+          </div>
+          <div id="voiceSpeakingIndicator" class="hidden px-4 py-2 bg-emerald-50 border-t border-emerald-200 items-center justify-between">
+            <div class="flex items-center gap-2"><div class="flex items-center gap-1 h-5"><span class="voice-wave-bar"></span><span class="voice-wave-bar"></span><span class="voice-wave-bar"></span><span class="voice-wave-bar"></span><span class="voice-wave-bar"></span></div><span class="text-[11px] text-emerald-800 font-bold">Speaking</span></div>
+            <button onclick="stopSpeechSimulation()" class="text-[11px] text-slate-500 hover:text-slate-800 font-semibold">Mute</button>
+          </div>
+          <div class="p-3 border-t border-slate-200"><div class="flex flex-wrap gap-1.5" id="chatSuggestionChips"></div></div>
+          <div class="p-3 border-t border-slate-200 flex items-center gap-2">
+            <button type="button" id="voiceMicBtn" onclick="toggleVoiceRecording()" title="Speak a question" class="w-10 h-10 rounded-xl bg-slate-50 hover:bg-slate-100 border border-slate-200 text-slate-600 flex items-center justify-center flex-shrink-0"><i id="micIcon" data-lucide="mic" class="w-4 h-4"></i></button>
+            <input type="text" id="chatInput" placeholder="Ask about batches, expiry, stock..." onkeydown="if(event.key==='Enter') sendChatMessage()" class="flex-1 bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500">
+            <button type="button" onclick="sendChatMessage()" aria-label="Send" class="w-10 h-10 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 text-white flex items-center justify-center flex-shrink-0"><i data-lucide="send" class="w-4 h-4"></i></button>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <!-- Purchase order modal -->
+  <div id="reorderModal" class="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-sm hidden items-center justify-center p-4">
+    <div class="bg-white border border-slate-200 rounded-2xl max-w-md w-full p-6 shadow-2xl">
+      <div class="flex items-center justify-between mb-3">
+        <h3 class="text-base font-bold text-slate-900">Create purchase orders</h3>
+        <button onclick="closeReorderModal()" aria-label="Close" class="text-slate-400 hover:text-slate-600"><i data-lucide="x" class="w-4 h-4"></i></button>
+      </div>
+      <p class="text-xs text-slate-500 mb-4">These products are below their reorder point. Approve to queue orders with suppliers.</p>
+      <div class="space-y-2 text-xs">
+        <div class="p-2.5 rounded-xl bg-slate-50 border border-slate-200 flex justify-between"><span class="font-medium text-slate-800">Whole wheat bread 400g</span><b class="text-orange-600">+50 loaves</b></div>
+        <div class="p-2.5 rounded-xl bg-slate-50 border border-slate-200 flex justify-between"><span class="font-medium text-slate-800">Fresh whole milk 1L</span><b class="text-orange-600">+80 cartons</b></div>
+        <div class="p-2.5 rounded-xl bg-slate-50 border border-slate-200 flex justify-between"><span class="font-medium text-slate-800">Organic Greek yogurt 500g</span><b class="text-orange-600">+40 tubs</b></div>
+        <div class="p-2.5 rounded-xl bg-slate-50 border border-slate-200 flex justify-between"><span class="font-medium text-slate-800">Insulin glargine 100IU</span><b class="text-orange-600">+25 vials</b></div>
+      </div>
+      <div class="mt-5 flex gap-2">
+        <button onclick="closeReorderModal()" class="flex-1 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-semibold">Cancel</button>
+        <button onclick="confirmReorder()" class="flex-1 py-2 bg-gradient-to-r from-emerald-600 to-teal-600 text-white rounded-xl text-xs font-bold">Approve and send</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="mockData.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
